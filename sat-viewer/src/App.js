@@ -1,6 +1,6 @@
 import './App.css';
 import React, { useState, useEffect } from 'react';
-import { useKeyPress } from "@uidotdev/usehooks";
+import useKeypress from 'react-use-keypress';
 
 
 const SatImage = (props) => {
@@ -47,8 +47,19 @@ const ImageArea = () => {
   const right = () => { changeValue(x0, 1, maxX - 1, setX0) }
   const up = () => { changeValue(y0, -1, maxY - 1, setY0) }
   const down = () => { changeValue(y0, 1, maxY - 1, setY0) }
+  useKeypress(["h", "j", "k", "l"], (event) =>{
+    if(event.key == "h"){
+      left()
+    }else if(event.key == "j"){
+      down()
+    }else if(event.key == "k"){
+      up()
+    }else if(event.key == "l"){
+      right()
 
-
+    }
+    console.log("Woah")
+  })
 
   return (
     <div className="App" >
