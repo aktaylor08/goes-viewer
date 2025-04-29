@@ -1,5 +1,7 @@
 from fastapi import FastAPI
 from fastapi.responses import Response
+from PIL import Image, ImageDraw, ImageFont
+import io
 
 app = FastAPI()
 
@@ -15,6 +17,9 @@ async def root():
     response_class=Response,
 )
 async def img(crs: str, z: int, x: int, y: int):
-    with open(f"tiles/{z}-{x}-{y}.png", "rb") as f:
-        data = f.read()
-        return Response(content=data, media_type="Image/png")
+    img = Image.new('L', (256, 256))
+    drawer = ImageDraw.Draw(img)
+    drawer.text((100, 100), f"{crs}: {z}, {x}. {y}", fill=256)
+    dabytes = io.BytesIO()
+    img.save(dabytes, 'png')
+    return Response(content=dabytes.getvalue(), media_type="Image/png")

@@ -15,11 +15,13 @@ const Display = (props) => {
         <SatImage x={props.x} y={props.y} />
         <SatImage x={props.x + 1} y={props.y} />
         <SatImage x={props.x + 2} y={props.y} />
+        <SatImage x={props.x + 3} y={props.y} />
       </div>
       <div className="row">
         <SatImage x={props.x} y={props.y + 1} />
         <SatImage x={props.x + 1} y={props.y + 1} />
         <SatImage x={props.x + 2} y={props.y + 1} />
+        <SatImage x={props.x + 3} y={props.y +1} />
       </div >
     </div>
   );

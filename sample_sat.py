@@ -17,7 +17,7 @@ def main():
     start_time = datetime.datetime.utcnow() - datetime.timedelta(hours=1)
     print(start_time)
     s3 = boto3.resource("s3", config=Config(signature_version=UNSIGNED))
-    bucket = s3.Bucket("noaa-goes16")
+    bucket = s3.Bucket("noaa-goes19")
     prefix = start_time.strftime("ABI-L1b-RadC/%Y/%j/%H/OR_ABI-L1b-RadC-M6C02")
     ch2 = bucket.objects.filter(Prefix=prefix)
     last_file = list(ch2)[-1]

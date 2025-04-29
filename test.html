@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Custom CRS Map Viewer</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
+    
+    <!-- Proj4js for CRS transformations -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.9.0/proj4.js"></script>
+    
+    <!-- Leaflet JavaScript -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+    
+    <!-- Leaflet Proj4 extension -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4leaflet/1.0.2/proj4leaflet.min.js"></script>
+    
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+        }
+        
+        #map {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 100%;
+            height: 100%;
+        }
+        
+        .controls {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 1000;
+            background: white;
+            padding: 10px;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.2);
+        }
+        
+        .info {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            z-index: 1000;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 10px;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.2);
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    
+    <div class="controls">
+        <select id="crs-selector">
+            <option value="EPSG:3857">EPSG:3857 (Web Mercator)</option>
+            <option value="EPSG:4326">EPSG:4326 (WGS84)</option>
+            <option value="SAT-75">SAT VIEW</option>
+            <!-- Add more CRS options as needed -->
+        </select>
+        <button id="switch-crs">Switch CRS</button>
+    </div>
+    
+    <div class="info">
+        <div>Zoom: <span id="zoom-level">0</span></div>
+        <div>Center: <span id="map-center">0, 0</span></div>
+        <div>Current CRS: <span id="current-crs">EPSG:3857</span></div>
+    </div>
+    
+    <script>
+        // Define CRS definitions
+        const crsDefinitions = {
+            'EPSG:3857': {
+                proj4def: '+proj=merc +a=6378137 +b=6378137 +lat_ts=0 +lon_0=0 +x_0=0 +y_0=0 +k=1 +units=m +nadgrids=@null +wktext +no_defs',
+                bounds: L.bounds([-20037508.34, -20037508.34], [20037508.34, 20037508.34]),
+                origin: [-20037508.34, 20037508.34],
+                resolutions: generateResolutions(20)
+            },
+            'EPSG:4326': {
+                proj4def: '+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs',
+                bounds: L.bounds([-180, -90], [180, 90]),
+                origin: [-180, 90],
+                resolutions: generateResolutions(8, 0.703125) // Approx 0.703125 degrees per pixel at zoom 0
+            },
+            'EPSG:2263': {
+                proj4def: '+proj=lcc +lat_1=41.03333333333333 +lat_2=40.66666666666666 +lat_0=40.16666666666666 +lon_0=-74 +x_0=300000 +y_0=0 +ellps=GRS80 +datum=NAD83 +units=ft +no_defs',
+                bounds: L.bounds([913175.9, 120053.8], [1067382.5, 272260.4]), // NYC bounds in EPSG:2263
+                origin: [913175.9, 272260.4],
+                resolutions: generateResolutions(8, 128) // Adjust as needed
+            },
+            'SAT-75': {
+                proj4def: '+proj=geos +h=35786000 +lon_0=-75 +x_0=0 +y_0=0 +a=6378137 +b=6356752.3 +units=m +no_defs',
+                bounds: L.bounds([-5434644, -5434644], [10990580, 10990580]), // Approximate visible Earth disc
+                origin: [-5434644,-5434544 ],
+                resolutions: generateResolutions(8, 16000) // Adjust based on your needs
+        }
+        };
+        
+        // Function to generate resolutions for a given number of zoom levels
+        function generateResolutions(maxZoom, initialResolution = 156543.03392) {
+            const resolutions = [];
+            for (let zoom = 0; zoom <= maxZoom; zoom++) {
+                resolutions.push(initialResolution / Math.pow(2, zoom));
+            }
+            return resolutions;
+        }
+        
+        // Initialize the map with the default CRS (Web Mercator)
+        let currentCrs = 'EPSG:3857';
+        let map;
+        let tileLayer;
+        
+        // Create the map with the specified CRS
+        function initMap(crsKey) {
+            // Remove existing map if any
+            if (map) {
+                map.remove();
+            }
+            console.log(crsKey)
+            
+            const crsConfig = crsDefinitions[crsKey];
+            console.log(crsConfig)
+            
+            // Create custom CRS
+            const customCrs = new L.Proj.CRS(crsKey, 
+                crsConfig.proj4def, 
+                {
+                    origin: crsConfig.origin,
+                    bounds: crsConfig.bounds,
+                    resolutions: crsConfig.resolutions
+                }
+            );
+            
+            // Initialize map with custom CRS
+            map = L.map('map', {
+                crs: customCrs,
+                continuousWorld: true,
+                minZoom: 0,
+                maxZoom: 19
+            });
+            
+            // Set initial view - adjust for your data
+            if (crsKey === 'EPSG:3857') {
+                map.setView([0, 0], 2);
+            } else if (crsKey === 'EPSG:4326') {
+                map.setView([0, 0], 2);
+            } else if (crsKey === 'SAT-75') {
+                // NYC approximate center in 2263
+                map.setView([0, 0 ], 2); // These will be transformed by Leaflet
+            }
+            
+            // Add tile layer
+            tileLayer = L.tileLayer(`http://localhost:8000/tiles/${crsKey}/{z}/{x}/{y}.png`, {
+                maxZoom: 8,
+                attribution: '&copy; Your Custom Map'
+            }).addTo(map);
+            
+            // Update info panel on map events
+            map.on('zoom', updateInfo);
+            map.on('move', updateInfo);
+            
+            // Update the CRS indicator
+            document.getElementById('current-crs').textContent = crsKey;
+            
+            // Initial info update
+            updateInfo();
+        }
+        
+        // Update the info panel with current map state
+        function updateInfo() {
+            document.getElementById('zoom-level').textContent = map.getZoom();
+            const center = map.getCenter();
+            document.getElementById('map-center').textContent = 
+                `${center.lat.toFixed(4)}, ${center.lng.toFixed(4)}`;
+        }
+        
+        // Event listener for CRS switch button
+        document.getElementById('switch-crs').addEventListener('click', function() {
+            const selectedCrs = document.getElementById('crs-selector').value;
+            if (selectedCrs !== currentCrs) {
+                currentCrs = selectedCrs;
+                initMap(currentCrs);
+            }
+        });
+        
+        // Initialize the map with default CRS
+        initMap(currentCrs);
+    </script>
+</body>
+</html>
