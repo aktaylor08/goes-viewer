@@ -2,10 +2,12 @@
 import datetime
 import sys
 from pathlib import Path
-import matplotlib.pyplot as plt
 
 import xarray
 import numpy as np
+import redis
+import time
+import io
 
 
 import boto3
@@ -35,9 +37,11 @@ class Tiler:
         self.tile_size =  256
         self.sat_height =  35786023
         self.tile_set_points = self.step *  self.max_res + self.min_window
+        self.r_client = redis.Redis()
         print((self.max_res / 256) * self.sat_height)
 
     def make_images(self, level, images, ds):
+        key_start = f"{time.strftime("%Y-%m-%dT%H-%M-%S",time.gmtime(ds.t.values.astype(int)/1000000000))}:vis:{level}"
         pix_per_img = int(self.max_res / images)
         img_step = int(pix_per_img / self.tile_size)
         for imgx in range(images):
@@ -57,10 +61,15 @@ class Tiler:
                     pad_width = [(0, x) for x in needed] 
                     new_values = np.pad(new_values, pad_width)
                 image = Image.fromarray(new_values, mode="L")
-                image.save(f"tiles/{level}-{imgx}-{imgy}.png")
+                dabytes = io.BytesIO()
+                image.save(dabytes, 'png')
+                rkey = f"{key_start}:{imgx}:{imgy}"
+                self.r_client.set(rkey, dabytes.getvalue())
+                print(f"Saved to {rkey}")
 
     def tile(self):
         ds = xarray.open_dataset("latest-conus.nc")
+        tileset_key = f"{time.strftime("%Y-%m-%dT%H-%M-%S",time.gmtime(ds.t.values.astype(int)/1000000000))}"
         level = 0
         images = 1
         total_points_dim = images * self.tile_size
@@ -70,7 +79,8 @@ class Tiler:
             images *= 2
             total_points_dim = images * self.tile_size
         self.make_images(level, images, ds)
-
+        self.r_client.sadd("obs:vis", tileset_key.encode("UTF-8"))
+        print(self.r_client.smembers("obs:vis"))
 
 def main():
     if len(sys.argv) > 1:
