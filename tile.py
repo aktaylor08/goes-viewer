@@ -16,14 +16,22 @@ from botocore.client import Config
 
 from PIL import Image
 
-def download_data(region: str, start_time):
+def download_data():
     print("DOWNLOADING NEW DATA")
     s3 = boto3.resource("s3", config=Config(signature_version=UNSIGNED))
-    bucket = s3.Bucket("noaa-goes19")
-    prefix = start_time.strftime("ABI-L1b-RadF/%Y/%j/%H/OR_ABI-L1b-RadF-M6C02")
-    ch2 = bucket.objects.filter(Prefix=prefix)
-    last_file = list(ch2)[-1]
-    bucket.download_file(last_file.key, "latest-conus.nc")
+    atime = datetime.datetime.now(datetime.UTC)
+    while True:
+        bucket = s3.Bucket("noaa-goes19")
+        prefix = atime.strftime("ABI-L1b-RadF/%Y/%j/%H/OR_ABI-L1b-RadF-M6C02")
+        ch2 = list(bucket.objects.filter(Prefix=prefix))
+        if ch2:
+            last_file_key = ch2[-1]
+            print("Downloading", last_file_key)
+            bucket.download_file(last_file_key.key, "latest-conus.nc")
+            break
+        else:
+            atime = atime - datetime.timedelta(hours=1)
+            print("going back an hour")
 
 class Tiler:
 
@@ -82,13 +90,24 @@ class Tiler:
         self.r_client.sadd("obs:vis", tileset_key.encode("UTF-8"))
         print(self.r_client.smembers("obs:vis"))
 
+def redis_loop():
+    client = redis.Redis()
+    s3 = boto3.resource("s3", config=Config(signature_version=UNSIGNED))
+    bucket = s3.Bucket("noaa-goes19")
+    for x in client.sdiff('totile', 'tiledone'):
+        bucket.download_file(x.decode(), "latest-conus.nc")
+        worker = Tiler("latest-conus.nc")
+        worker.tile()
+        client.sadd('tiledone', x)
+
 def main():
     if len(sys.argv) > 1:
-        start_time = datetime.datetime.utcnow() - datetime.timedelta(hours=1)
-        download_data('', start_time)
-    tile_size = 256
-    worker = Tiler("latest-conus.nc")
-    worker.tile()
+        if sys.argv[1].startswith('r'):
+            redis_loop()
+        else:
+            download_data()
+            worker = Tiler("latest-conus.nc")
+            worker.tile()
 
 if __name__ == "__main__":
     main()
