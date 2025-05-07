@@ -61,9 +61,19 @@
     <div id="map"></div>
     
     <div class="controls">
+        <label for="time-selector">Current:</label>
         <select id="time-selector">
         </select>
-        <button id="switch-time">Switch time</button>
+        </br>
+        <label for=" frames">Frame Count:</label>
+        <input type="text" id="frames" name="frames" value="5">
+        <button id="refresh" onclick="fetchAndUpdate()">Refresh</button>
+        </br>
+        <label for="preload">Preload-count:</label>
+        <input type="text" id="preload" name="preload" value="5">
+        <button id="refresh">Update</button>
+
+
     </div>
     
     <div class="info">
@@ -141,7 +151,7 @@
                 crs: customCrs,
                 continuousWorld: true,
                 minZoom: 0,
-                maxZoom: 19
+                maxZoom: 7 
             });
             
             // Set initial view - adjust for your data
@@ -167,6 +177,38 @@
         function updateInfo() {
             document.getElementById('zoom-level').textContent = map.getZoom();
             document.getElementById('current-time').textContent = `${mapTime}`;
+        }
+
+        function fetchAndUpdate(){
+            let numToFetch = document.getElementById('frames').value;
+            console.log(numToFetch);
+            fetch(`http://localhost:8000/obs/times/vis?limit=${numToFetch}`).then((response) => {
+                if(!response.ok){
+                    console.log("ERROR! getting times");
+                    throw new Error(`HTTP error: ${response.status}`);
+                }
+                return response.json();
+
+            }).then((text) => {
+                const selectElement = document.getElementById('time-selector');
+                selectElement.innerHTML = '';
+                // Create and append new options
+                text.forEach(datething=> {
+                    const optionElement = document.createElement('option');
+                    optionElement.value = datething;
+                    optionElement.text = datething;
+                    selectElement.appendChild(optionElement);
+                    let tileLayer = L.tileLayer(`http://localhost:8000/tiles/${datething}/{z}/{x}/{y}.png`, {
+                        maxZoom: 8,
+                        attribution: '&copy; Your Custom Map',
+                        opacity: 0
+                    }).addTo(map);
+                    mapLayers.push(tileLayer);
+                });
+                selectElement.slsectedIndex = 0;
+                selectElement.dispatchEvent(new Event('change'));
+            });
+
         }
         
         // Event listener for CRS switch button
@@ -211,33 +253,8 @@
 		});
 
         initMap(currentCrs);
+        fetchAndUpdate();
 		
-        fetch("http://localhost:8000/obs/times/vis").then((response) => {
-            if(!response.ok){
-                console.log("ERROR! getting times");
-                throw new Error(`HTTP error: ${response.status}`);
-            }
-            return response.json();
-
-        }).then((text) => {
-            const selectElement = document.getElementById('time-selector');
-            selectElement.innerHTML = '';
-            // Create and append new options
-            text.forEach(datething=> {
-                const optionElement = document.createElement('option');
-                optionElement.value = datething;
-                optionElement.text = datething;
-                selectElement.appendChild(optionElement);
-                let tileLayer = L.tileLayer(`http://localhost:8000/tiles/${datething}/{z}/{x}/{y}.png`, {
-                    maxZoom: 8,
-                    attribution: '&copy; Your Custom Map',
-                    opacity: 0
-                }).addTo(map);
-                mapLayers.push(tileLayer);
-            });
-            selectElement.slsectedIndex = 0;
-    		selectElement.dispatchEvent(new Event('change'));
-        });
 
         // Initialize the map with default CRS
     </script>
