@@ -46,7 +46,6 @@ class Tiler:
         self.sat_height =  35786023
         self.tile_set_points = self.step *  self.max_res + self.min_window
         self.r_client = redis.Redis()
-        print((self.max_res / 256) * self.sat_height)
 
     def make_images(self, level, images, ds):
         key_start = f"{time.strftime("%Y-%m-%dT%H-%M-%S",time.gmtime(ds.t.values.astype(int)/1000000000))}:vis:{level}"
@@ -59,7 +58,6 @@ class Tiler:
                 end_x = start_x + pix_per_img
                 end_y = start_y + pix_per_img
                 if start_y > ds.y.shape[0] or start_x > ds.x.shape[0]:
-                    print("skip")
                     continue
                 values = ds.Rad[start_y:end_y:img_step, start_x:end_x:img_step] * ds.kappa0 * 256
                 new_values = values.data.astype(np.uint8)
@@ -73,11 +71,11 @@ class Tiler:
                 image.save(dabytes, 'png')
                 rkey = f"{key_start}:{imgx}:{imgy}"
                 self.r_client.set(rkey, dabytes.getvalue())
-                print(f"Saved to {rkey}")
 
     def tile(self):
         ds = xarray.open_dataset("latest-conus.nc")
         tileset_key = f"{time.strftime("%Y-%m-%dT%H-%M-%S",time.gmtime(ds.t.values.astype(int)/1000000000))}"
+        print("Tilining to", tileset_key)
         level = 0
         images = 1
         total_points_dim = images * self.tile_size
@@ -94,11 +92,20 @@ def redis_loop():
     client = redis.Redis()
     s3 = boto3.resource("s3", config=Config(signature_version=UNSIGNED))
     bucket = s3.Bucket("noaa-goes19")
-    for x in client.sdiff('totile', 'tiledone'):
-        bucket.download_file(x.decode(), "latest-conus.nc")
-        worker = Tiler("latest-conus.nc")
-        worker.tile()
-        client.sadd('tiledone', x)
+    while True:
+        for x in client.sdiff('totile', 'tiledone', 'tileprogress'):
+            if client.smove('totile', 'tileprogress', x): 
+                print("Downlaoding and tiling", x.decode())
+                try:
+                    bucket.download_file(x.decode(), "latest-conus.nc")
+                    worker = Tiler("latest-conus.nc")
+                    worker.tile()
+                    client.smove('tileprogress', 'tiledone', x)
+                except:
+                    client.srem('tileprogress', x)
+                    print("error with ", x)
+        print('sleeping')
+        time.sleep(10)
 
 def main():
     if len(sys.argv) > 1:

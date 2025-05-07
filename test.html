@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+    
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -61,16 +62,13 @@
     
     <div class="controls">
         <select id="time-selector">
-            <option value="latest">latest<toption>
-            <!-- Add more CRS options as needed -->
         </select>
         <button id="switch-time">Switch time</button>
     </div>
     
     <div class="info">
         <div>Zoom: <span id="zoom-level">0</span></div>
-        <div>Center: <span id="map-center">0, 0</span></div>
-        <div>Current CRS: <span id="current-crs">EPSG:3857</span></div>
+        <div>Current Time: <span id="current-time">None</span></div>
     </div>
     
     <script>
@@ -114,7 +112,8 @@
         // Initialize the map with the default CRS (Web Mercator)
         let currentCrs = 'EPSG:3857';
         let map;
-        let tileLayer;
+        let mapLayers = []
+        let mapTime;
         
         // Create the map with the specified CRS
         function initMap(crsKey) {
@@ -155,18 +154,10 @@
                 map.setView([0, 0 ], 2); // These will be transformed by Leaflet
             }
             
-            // Add tile layer
-            tileLayer = L.tileLayer(`http://localhost:8000/tiles/latest/{z}/{x}/{y}.png`, {
-                maxZoom: 8,
-                attribution: '&copy; Your Custom Map'
-            }).addTo(map);
             
             // Update info panel on map events
             map.on('zoom', updateInfo);
-            map.on('move', updateInfo);
-            
-            // Update the CRS indicator
-            document.getElementById('current-crs').textContent = crsKey;
+            //map.on('move', updateInfo);
             
             // Initial info update
             updateInfo();
@@ -175,41 +166,52 @@
         // Update the info panel with current map state
         function updateInfo() {
             document.getElementById('zoom-level').textContent = map.getZoom();
-            const center = map.getCenter();
-            document.getElementById('map-center').textContent = 
-                `${center.lat.toFixed(4)}, ${center.lng.toFixed(4)}`;
+            document.getElementById('current-time').textContent = `${mapTime}`;
         }
         
         // Event listener for CRS switch button
         document.getElementById('time-selector').addEventListener('change', function() {
             const selectedTime= document.getElementById('time-selector').value;
-            tileLayer.setUrl(`http://localhost:8000/tiles/${selectedTime}/{z}/{x}/{y}.png`)
-            console.log(selectedTime);
+            const idx = document.getElementById('time-selector').selectedIndex;
+            mapLayers.forEach((layer, index) => {
+                console.log(index, idx);
+                if(idx == index){
+                    console.log("Turning on layer $idx");
+                    layer.setOpacity(1);
+                }else{
+                    layer.setOpacity(0);
+                }
+            });
+            mapTime = selectedTime;
+            updateInfo();
         });
+
 
 		document.addEventListener('keydown', (event) =>{
             const selectedTime= document.getElementById('time-selector');
-			currentIdx = selectedTime.selectedIndex;
-			if (event.key == 'a'){
+			let currentIdx = selectedTime.selectedIndex;
+			if (event.key == 'f'){
 				currentIdx -= 1;
-			}else if(event.key == 's'){
+			}else if(event.key == 'b'){
 				currentIdx += 1;
-			}
+			}else if(event.key == 'o'){
+				currentIdx = selectedTime.length - 1;
+			}else if(event.key == 'n'){
+				currentIdx = 0;
+            }
+
 			if(currentIdx == selectedTime.length){
-				currentIdx =1;
-			}else if(currentIdx < 1){
+				currentIdx =0;
+			}else if(currentIdx < 0){
 				currentIdx = selectedTime.length - 1;
 			}
   			selectedTime.selectedIndex = currentIdx;
     		selectedTime.dispatchEvent(new Event('change'));
- 
-			console.log(currentIdx);
 
 		});
 
+        initMap(currentCrs);
 		
-
-
         fetch("http://localhost:8000/obs/times/vis").then((response) => {
             if(!response.ok){
                 console.log("ERROR! getting times");
@@ -220,23 +222,24 @@
         }).then((text) => {
             const selectElement = document.getElementById('time-selector');
             selectElement.innerHTML = '';
-            const optionElement = document.createElement('option');
-            optionElement.value = "latest";
-            optionElement.text = "latest";
-            selectElement.appendChild(optionElement);
             // Create and append new options
             text.forEach(datething=> {
                 const optionElement = document.createElement('option');
                 optionElement.value = datething;
                 optionElement.text = datething;
                 selectElement.appendChild(optionElement);
+                let tileLayer = L.tileLayer(`http://localhost:8000/tiles/${datething}/{z}/{x}/{y}.png`, {
+                    maxZoom: 8,
+                    attribution: '&copy; Your Custom Map',
+                    opacity: 0
+                }).addTo(map);
+                mapLayers.push(tileLayer);
             });
+            selectElement.slsectedIndex = 0;
+    		selectElement.dispatchEvent(new Event('change'));
         });
 
-
-        
         // Initialize the map with default CRS
-        initMap(currentCrs);
     </script>
 </body>
 </html>

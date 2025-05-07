@@ -9,7 +9,7 @@ app = FastAPI()
 
 r_client = redis.Redis()
 
-latestkey = sorted(r_client.smembers('obs:vis'))[-1].decode("UTF-8")
+latestkey = None 
 origins = [
     "http://localhost",
     "http://localhost:8080",
@@ -37,6 +37,9 @@ async def root():
 )
 async def img(ob_time: str, z: int, x: int, y: int):
     if ob_time == 'latest':
+        global latestkey
+        if latestkey is None:
+            latestkey = sorted(r_client.smembers('obs:vis'))[-1].decode("UTF-8")
         ob_time = latestkey
     t1 = time.time()
     key = f"{ob_time}:vis:{z}:{x}:{y}"
@@ -48,7 +51,7 @@ async def img(ob_time: str, z: int, x: int, y: int):
 @app.get(
         "/obs/times/{type}",
         )
-async def obs(type: str):
-    data = [x.decode("UTF-8") for x in sorted(r_client.smembers(f'obs:{type}'), reverse=True)]
+async def obs(type: str, limit: int=10):
+    data = [x.decode("UTF-8") for x in sorted(r_client.smembers(f'obs:{type}'), reverse=True)][:limit]
     return data 
 

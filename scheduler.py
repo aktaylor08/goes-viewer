@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import datetime
 import sys
+import time
 
 import redis
 import re
@@ -24,18 +25,25 @@ def find_data(lookback: int):
             f = re.search('.*ABI.*s(\d\d\d\d)(\d\d\d)(\d\d)(\d\d).*', x.key)
             shot_time = datetime.datetime(year=int(f.group(1)), month=1, day=1, tzinfo=datetime.UTC) + datetime.timedelta(days=int(f.group(2)) -1, hours=int(f.group(3)), minutes=int(f.group(4)))
             if shot_time >= time_limit:
+                if client.sismember('totile', x.key) or client.sismember('tileprogress', x.key) or client.sismember('tiledone', x.key):
+                    continue
+                print("Adding", x.key)
                 client.sadd('totile', x.key)
         if prefix == start_prefix:
             break
         atime = atime + datetime.timedelta(hours=1)
         prefix = atime.strftime("ABI-L1b-RadF/%Y/%j/%H/OR_ABI-L1b-RadF-M6C02")
+        print(client.scard('totile'), client.scard('tileprogress'), client.scard('tiledone'))
 
 def main():
     if len(sys.argv) > 1:
         lookback = int(sys.argv[1])
     else:
         lookback=60
-    find_data(lookback)
+    while True:
+        find_data(lookback)
+        time.sleep(10)
+
 
 if __name__ == "__main__":
     main()
