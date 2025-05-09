@@ -59,7 +59,7 @@ class Tiler:
                 end_y = start_y + pix_per_img
                 if start_y > ds.y.shape[0] or start_x > ds.x.shape[0]:
                     continue
-                values = ds.Rad[start_y:end_y:img_step, start_x:end_x:img_step] * ds.kappa0 * 256
+                values = np.clip(ds.Rad[start_y:end_y:img_step, start_x:end_x:img_step] * ds.kappa0 * 256, 0, 255)
                 new_values = values.data.astype(np.uint8)
                 if values.data.shape != (256, 256):
                     dshape = np.array(values.data.shape)
